@@ -214,3 +214,8 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+=======
+# Default ignored files
+/shelf/
+/workspace.xml
+>>>>>>> 8cacefad3b6fcb50d44442c6ac88dbacd1bd65a6
