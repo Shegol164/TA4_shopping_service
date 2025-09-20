@@ -8,98 +8,58 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
-async def detailed_db_check():
-    """Подробная проверка подключения к базе данных"""
+async def check_db_connection():
     try:
-        logger.info("=== Подробная проверка подключения к БД ===")
-        logger.info(f"Host: localhost")
-        logger.info(f"Port: {settings.POSTGRES_PORT}")
-        logger.info(f"User: {settings.POSTGRES_USER}")
-        logger.info(f"Database: {settings.POSTGRES_DB}")
-        logger.info("========================================")
+        logger.info("Попытка подключения к базе данных...")
+        logger.info(
+            f"URL: postgresql://{settings.POSTGRES_USER}:***@localhost:{settings.POSTGRES_PORT}/{settings.POSTGRES_DB}")
 
-        # Попытка подключения
+        # Попытка подключения к базе данных
         conn = await asyncpg.connect(
             host="localhost",
             port=int(settings.POSTGRES_PORT),
             user=settings.POSTGRES_USER,
             password=settings.POSTGRES_PASSWORD,
-            database=settings.POSTGRES_DB,
-            timeout=30
+            database=settings.POSTGRES_DB
         )
-
-        # Получаем информацию о подключении
         version = await conn.fetchval("SELECT version()")
-        current_database = await conn.fetchval("SELECT current_database()")
-        current_user = await conn.fetchval("SELECT current_user")
-
-        logger.info(f"✅ Подключение успешно!")
-        logger.info(f"PostgreSQL версия: {version}")
-        logger.info(f"Текущая база: {current_database}")
-        logger.info(f"Текущий пользователь: {current_user}")
-
-        # Проверяем права пользователя
-        try:
-            privileges = await conn.fetchval("""
-                SELECT COUNT(*) FROM information_schema.table_privileges 
-                WHERE grantee = $1
-            """, settings.POSTGRES_USER)
-            logger.info(f"Права пользователя: найдено {privileges} привилегий")
-        except Exception as priv_error:
-            logger.warning(f"Не удалось проверить привилегии: {priv_error}")
-
+        logger.info(f"✅ Успешное подключение к базе данных!")
+        logger.info(f"Версия PostgreSQL: {version}")
         await conn.close()
         return True
-
-    except asyncpg.InvalidPasswordError:
-        logger.error("❌ Неверный пароль для пользователя")
-        return False
-    except asyncpg.InvalidAuthorizationSpecificationError:
-        logger.error("❌ Неверные учетные данные")
-        return False
-    except asyncpg.ConnectionDoesNotExistError:
-        logger.error("❌ Сервер PostgreSQL не доступен")
-        return False
     except Exception as e:
-        logger.error(f"❌ Ошибка подключения: {type(e).__name__}: {e}")
+        logger.error(f"❌ Ошибка подключения к базе данных: {e}")
         return False
 
 
-async def check_postgres_service():
-    """Проверяет доступность PostgreSQL сервиса"""
+async def create_test_user():
+    """Создает тестового пользователя для проверки"""
     try:
-        # Попытка подключения к системной базе
         conn = await asyncpg.connect(
             host="localhost",
             port=int(settings.POSTGRES_PORT),
             user=settings.POSTGRES_USER,
             password=settings.POSTGRES_PASSWORD,
-            database="postgres",
-            timeout=10
+            database=settings.POSTGRES_DB
         )
-        version = await conn.fetchval("SELECT version()")
-        logger.info(f"PostgreSQL сервис доступен: {version}")
+
+        # Проверим существование таблиц
+        tables = await conn.fetch("SELECT tablename FROM pg_tables WHERE schemaname = 'public'")
+        logger.info(f"Существующие таблицы: {[table['tablename'] for table in tables]}")
+
         await conn.close()
         return True
     except Exception as e:
-        logger.error(f"PostgreSQL сервис недоступен: {e}")
+        logger.error(f"❌ Ошибка при работе с базой данных: {e}")
         return False
 
 
 if __name__ == "__main__":
-    logger.info("Запуск диагностики подключения к базе данных...")
-
-    # Проверяем доступность PostgreSQL
-    if not asyncio.run(check_postgres_service()):
-        logger.error("PostgreSQL сервис не доступен. Проверьте:")
-        logger.error("1. Запущен ли PostgreSQL сервис")
-        logger.error("2. Правильный ли порт указан (обычно 5432)")
-        logger.error("3. Правильные ли учетные данные")
+    print("Проверка подключения к базе данных...")
+    result = asyncio.run(check_db_connection())
+    if result:
+        print("✅ Подключение успешно!")
+        print("Проверка таблиц...")
+        asyncio.run(create_test_user())
     else:
-        # Подробная проверка
-        success = asyncio.run(detailed_db_check())
-        if success:
-            print("\n🎉 Диагностика пройдена успешно!")
-        else:
-            print("\n❌ Диагностика выявила проблемы!")
-            print("Проверьте настройки в файле .env")
+        print("❌ Не удалось подключиться к базе данных")
