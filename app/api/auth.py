@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
 from app.crud.user import get_user_by_login, create_user
@@ -7,7 +8,11 @@ from app.schemas.user import UserCreate, UserLogin, Token
 from datetime import timedelta
 from app.core.config import settings
 
+
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auth/login")
+
 router = APIRouter()
+
 
 
 @router.post("/register", response_model=Token)

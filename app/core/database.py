@@ -1,6 +1,7 @@
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
+from sqlalchemy import text
 from app.core.config import settings
 import logging
 import asyncio
@@ -10,10 +11,9 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
+# Создание асинхронного движка с расширенной обработкой ошибок
 def create_engine_with_retry():
-    """Создает движок с обработкой ошибок и повторными попытками"""
     try:
-        # URL для подключения
         db_url = settings.DATABASE_URL.replace('postgresql://', 'postgresql+asyncpg://')
         logger.info(f"Попытка подключения к: {db_url}")
 
@@ -22,13 +22,9 @@ def create_engine_with_retry():
             echo=True,
             pool_pre_ping=True,
             pool_recycle=300,
-            pool_timeout=30,
             connect_args={
-                "server_settings": {
-                    "statement_timeout": "30000",
-                    "idle_in_transaction_session_timeout": "30000"
-                },
-                "command_timeout": 30
+                "timeout": 30,
+                "command_timeout": 30,
             }
         )
         logger.info("Database engine created successfully")
@@ -38,7 +34,6 @@ def create_engine_with_retry():
         raise
 
 
-# Создание движка
 try:
     engine = create_engine_with_retry()
 except Exception as e:
@@ -58,7 +53,8 @@ Base = declarative_base()
 
 async def get_db():
     if not AsyncSessionLocal:
-        raise Exception("Database engine not initialized")
+        raise Exception("Database engine is not available")
+
     async with AsyncSessionLocal() as session:
         try:
             yield session
@@ -69,22 +65,43 @@ async def get_db():
             await session.close()
 
 
-async def create_db_and_tables(max_retries=3, retry_delay=2):
-    """Создает таблицы с повторными попытками"""
+async def test_connection():
+    """Тест подключения к базе данных"""
     if not engine:
-        raise Exception("Database engine not initialized")
+        logger.error("Database engine is not initialized")
+        return False
+
+    try:
+        async with engine.connect() as conn:
+            # Используем text() для SQL выражений
+            result = await conn.execute(text("SELECT 1"))
+            logger.info("Database connection test successful")
+            return True
+    except Exception as e:
+        logger.error(f"Connection test failed: {e}")
+        return False
+
+
+async def create_db_and_tables(max_retries=3):
+    if not engine:
+        logger.warning("Database engine is not available, skipping table creation")
+        return
 
     for attempt in range(max_retries):
         try:
-            logger.info(f"Попытка {attempt + 1} создания таблиц...")
+            logger.info(f"Attempt {attempt + 1} to create database tables...")
+            # Сначала проверим подключение
+            if not await test_connection():
+                raise Exception("Database connection failed")
+
             async with engine.begin() as conn:
                 await conn.run_sync(Base.metadata.create_all)
-            logger.info("✅ Таблицы созданы успешно")
+            logger.info("Database tables created successfully")
             return
         except Exception as e:
-            logger.error(f"Попытка {attempt + 1} не удалась: {e}")
+            logger.error(f"Attempt {attempt + 1} failed: {e}")
             if attempt < max_retries - 1:
-                logger.info(f"Ожидание {retry_delay} секунд перед повторной попыткой...")
-                await asyncio.sleep(retry_delay)
+                await asyncio.sleep(2)  # Подождем перед повторной попыткой
             else:
-                raise Exception(f"Не удалось создать таблицы после {max_retries} попыток: {e}")
+                logger.error("Failed to create database tables after all retries")
+                raise
