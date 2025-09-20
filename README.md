@@ -26,7 +26,7 @@ git clone https://github.com/Shegol164/TA4_shopping_service.git
 
 ### 2.Настройка виртуального окружения
 
-# Создание виртуального окружения
+#### Создание виртуального окружения
 python -m venv venv
 - Активация (Linux/Mac)
 source venv/bin/activate
