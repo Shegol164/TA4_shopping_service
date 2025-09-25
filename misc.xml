@@ -3,4 +3,5 @@
   <component name="Black">
     <option name="sdkName" value="Poetry (shopping_service)" />
   </component>
+  <component name="ProjectRootManager" version="2" project-jdk-name="Poetry (shopping_service)" project-jdk-type="Python SDK" />
 </project>
