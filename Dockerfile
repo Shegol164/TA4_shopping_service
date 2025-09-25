@@ -1,21 +1,11 @@
-FROM python:3.11-slim
+FROM postgres:15-alpine
 
-WORKDIR /app
+# Установка необходимых утилит
+RUN apk add --no-cache postgresql-client
 
-# Установка зависимостей системы
-RUN apt-get update && apt-get install -y \
-    gcc \
-    postgresql-client \
-    && rm -rf /var/lib/apt/lists/*
+# Установка переменных окружения
+ENV POSTGRES_DB=${POSTGRES_DB:-TA4_shopping_service_db}
+ENV POSTGRES_USER=${POSTGRES_USER:-user}
+ENV POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-2543474Pasha}
 
-# Копирование и установка Python зависимостей
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
-
-# Копирование кода приложения
-COPY . .
-
-# Создание директории для Alembic
-RUN mkdir -p alembic/versions
-
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+EXPOSE 5432
